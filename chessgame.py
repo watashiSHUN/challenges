@@ -176,3 +176,49 @@ def rank_players_linear(match_results, N):
             return_value += 1
 
     return return_value
+
+
+# NOTE: this does not work
+# DFS + memoization (once a node is visited and the total number of visited node is known)
+def rank_players_with_memo(match_results, N):
+    graph = defaultdict(set)
+    reverse_graph = defaultdict(set)
+    for winner, loser in match_results:
+        graph[winner].add(loser)
+        reverse_graph[loser].add(winner)
+
+    # memoization
+    win_memo = {}  # reachable nodes, does NOT include self
+    lose_memo = {}
+
+    def dfs(node, memo, graph):
+        # print(memo)
+        if node in memo:
+            # print("Found in memo:", node)
+            return memo[node]
+        else:
+            reachable_node = 0
+            for neighbor in graph[node]:
+                reachable_node += (
+                    dfs(neighbor, memo, graph) + 1
+                )  # NOTE: need to count self.
+                # NOTE: this does not work A->B->C, A->D->C, (C is counted two times for A)
+            memo[node] = reachable_node
+            # print(i, reachable_node)
+        return memo[node]
+
+    return_value = 0
+
+    for i in range(1, N + 1):
+        # explore
+        win_against = dfs(i, win_memo, graph)
+        lose_against = dfs(i, lose_memo, reverse_graph)
+
+        # print(i, win_against, lose_against)
+        if win_against + lose_against == N - 1:
+            return_value += 1
+
+    return return_value
+
+
+print(rank_players_with_memo([(1, 2), (2, 3), (3, 4)], 4))
