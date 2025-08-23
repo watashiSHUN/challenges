@@ -71,3 +71,108 @@ def rank_players(match_results, N):
             return_value += 1
 
     return return_value
+
+
+# layered topological sort
+# Kahn's topo sort
+# when there are multiple nodes with 0-indegree => their order is not deterministic
+
+# if there's only 1 node with 0-indegree (deterministic order)
+# 1->2, 1->3, 1->4, only node_1 has 0-indegree
+
+# 1->2 alone, is not enough, if there's 3 node, let's add all the node into the in-degree map
+
+# [] in_degree_0 = [...] => all of them has rank at least length of the rest of the node?
+# no, single node (3) does not have reachables, and thus does not have a MIN RANK
+
+# 1->3
+# 2->3
+# 3->4
+# 3->5
+
+# [] nodes in the same indegree group (3,4,5) are not reachable from each other
+# no outgoing edges from 3,4,5 will reach 3,4,5 (since there's no incoming degree)
+# INDUCTION: at the very first step => all of them are SOURCES
+
+# [] if there's only 1 node in the indegree group, the rest is all reachable?
+# for a node X, it must not be indegree 0 -> it has a parent -> traverse to parent, if parent is not source then it too has a parent
+# or the otherway, current layer -> all node in next layer (since we only removed edges from source) -> continue
+# NOTE: only include nodes with edges
+# A->B, C
+# if we remove C, yeah, B is reachable from A
+# if we remove A...
+# NOTE:not about removing in order
+# always exame the indegree set in 1
+# NOTE: Layered topological sort, level decomposition
+# AT EACH STEP, WE ARE DEALING WITH SOURCES OF THE GRAPH
+
+
+# 1->2
+# 3->4
+# the rest of the node all have indegree ++
+
+
+def rank_players_linear(match_results, N):
+    winner_graph = defaultdict(set)
+    loser_graph = defaultdict(set)
+    winner_indegree = defaultdict(int)
+    loser_indegree = defaultdict(int)
+
+    min_rank = defaultdict(int)
+    max_rank = defaultdict(int)
+
+    for winner, loser in match_results:
+        winner_graph[winner].add(loser)
+        winner_indegree[loser] += 1
+
+        loser_graph[loser].add(winner)
+        loser_indegree[winner] += 1
+
+    # layered topological sort
+    # first, we deal with winners
+    # NOTE: also include nodes with
+    winner_indegree_zero = []
+    for i in range(1, N + 1):
+        if winner_indegree[i] == 0:
+            winner_indegree_zero.append(i)
+    remaining_nodes = N
+
+    # at each snapshot, exam the source[]
+    while winner_indegree_zero:
+        if len(winner_indegree_zero) == 1:
+            min_rank[winner_indegree_zero[0]] = remaining_nodes
+        # remove current layer
+        remaining_nodes -= len(winner_indegree_zero)
+        next_layer = []
+        for node in winner_indegree_zero:
+            for neighbor in winner_graph[node]:
+                winner_indegree[neighbor] -= 1
+                if winner_indegree[neighbor] == 0:
+                    next_layer.append(neighbor)
+        winner_indegree_zero = next_layer
+
+    # for losers
+    loser_indegree_zero = []
+    for i in range(1, N + 1):
+        if loser_indegree[i] == 0:
+            loser_indegree_zero.append(i)
+    remaining_nodes = N
+
+    while loser_indegree_zero:
+        if len(loser_indegree_zero) == 1:
+            max_rank[loser_indegree_zero[0]] = remaining_nodes
+        remaining_nodes -= len(loser_indegree_zero)
+        next_layer = []
+        for node in loser_indegree_zero:
+            for neighbor in loser_graph[node]:
+                loser_indegree[neighbor] -= 1
+                if loser_indegree[neighbor] == 0:
+                    next_layer.append(neighbor)
+        loser_indegree_zero = next_layer
+
+    return_value = 0
+    for i in range(1, N + 1):
+        if min_rank[i] + max_rank[i] == N + 1:
+            return_value += 1
+
+    return return_value
