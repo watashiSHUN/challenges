@@ -97,6 +97,8 @@ class TestRankPlayers(unittest.TestCase):
     def test_complex_tournament(self):
         """Test a more complex tournament structure"""
         match_results = [(1, 2), (1, 3), (2, 3), (2, 4), (3, 4)]
+        # 1>2>3>4
+        # 1>3, 2>4 (additional information)
         N = 4
         result_original = rank_players(match_results, N)
         result_linear = rank_players_linear(match_results, N)
@@ -158,13 +160,15 @@ class TestRankPlayersMemoOnly(unittest.TestCase):
     def test_memoization_efficiency(self):
         """Test that memoization works correctly with repeated subproblems"""
         # Create a diamond pattern: 1->2, 1->3, 2->4, 3->4
+        # 1->2->4
+        #  ->3->4 (2,3)'s rank are not known
         match_results = [(1, 2), (1, 3), (2, 4), (3, 4)]
         N = 4
         result = rank_players_with_memo(match_results, N)
 
         # All players should have precise rankings in this case
         self.assertEqual(
-            result, 4, "All players should have precise rankings in diamond pattern"
+            result, 2, "Only 2 players should have precise rankings in diamond pattern"
         )
 
     def test_deep_chain(self):

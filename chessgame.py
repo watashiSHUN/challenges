@@ -180,6 +180,7 @@ def rank_players_linear(match_results, N):
 
 # NOTE: this does not work
 # DFS + memoization (once a node is visited and the total number of visited node is known)
+# memoization, using set(so that we can dedup) not total count.
 def rank_players_with_memo(match_results, N):
     graph = defaultdict(set)
     reverse_graph = defaultdict(set)
@@ -188,23 +189,22 @@ def rank_players_with_memo(match_results, N):
         reverse_graph[loser].add(winner)
 
     # memoization
-    win_memo = {}  # reachable nodes, does NOT include self
+    win_memo = {}  # key: node, value: set() of reachable nodes
     lose_memo = {}
 
     def dfs(node, memo, graph):
-        # print(memo)
         if node in memo:
-            # print("Found in memo:", node)
             return memo[node]
         else:
-            reachable_node = 0
+            reachable_node = set()
             for neighbor in graph[node]:
-                reachable_node += (
-                    dfs(neighbor, memo, graph) + 1
-                )  # NOTE: need to count self.
-                # NOTE: this does not work A->B->C, A->D->C, (C is counted two times for A)
-            memo[node] = reachable_node
-            # print(i, reachable_node)
+                # NOTE: running time, each node takes O(n) time
+                reachable_node |= dfs(neighbor, memo, graph)
+                reachable_node.add(neighbor)  # include self (child)
+            memo[node] = (
+                reachable_node  # NOTE: Once we finished exploring, the total node size does not increase.
+            )
+        # print("DFS from node", node, "reached:", memo[node])
         return memo[node]
 
     return_value = 0
@@ -215,10 +215,11 @@ def rank_players_with_memo(match_results, N):
         lose_against = dfs(i, lose_memo, reverse_graph)
 
         # print(i, win_against, lose_against)
-        if win_against + lose_against == N - 1:
+        if len(win_against) + len(lose_against) == N - 1:
             return_value += 1
 
     return return_value
 
 
-print(rank_players_with_memo([(1, 2), (2, 3), (3, 4)], 4))
+# TODO(union_set)
+# Can it solve the repeated node issue?
