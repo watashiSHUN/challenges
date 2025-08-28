@@ -36,7 +36,7 @@ return the precise ranking of the players
 
 # [(1,2), (2,3), (3,4)], 4 => result shoould be 4 -> everyone has ranking
 # [(1,2), (1,3), (1,4)], 4 => result is 1, only player1 has ranking
-from collections import defaultdict
+from collections import defaultdict, deque
 
 
 def rank_players(match_results, N):
@@ -178,7 +178,7 @@ def rank_players_linear(match_results, N):
     return return_value
 
 
-# NOTE: this does not work
+# NOTE: memoization with reachable node size does not work, but works with reachable node SET.
 # DFS + memoization (once a node is visited and the total number of visited node is known)
 # memoization, using set(so that we can dedup) not total count.
 def rank_players_with_memo(match_results, N):
@@ -221,5 +221,146 @@ def rank_players_with_memo(match_results, N):
     return return_value
 
 
-# TODO(union_set)
-# Can it solve the repeated node issue?
+def rank_players_with_for_loop(match_results, N):
+    # first build graph and reversegraph
+    graph = defaultdict(set)
+    reverse_graph = defaultdict(set)
+    for winner, loser in match_results:
+        graph[winner].add(loser)
+        reverse_graph[loser].add(winner)
+
+    # return a dictionary where the key is the node, value is reachable node sets:
+    def helper(graph):
+        # build a topological order of the nodes
+        in_degree = defaultdict(int)  # node:in_degree(0)
+        for i in range(1, N + 1):
+            for dest in graph[i]:
+                in_degree[dest] += 1
+
+        # Kahn's algorithm for topological sorting
+        topo_order = []
+        zero_in_degree = deque()
+        for i in range(1, N + 1):
+            if in_degree[i] == 0:
+                zero_in_degree.append(i)
+
+        while zero_in_degree:
+            node = zero_in_degree.popleft()
+            topo_order.append(node)
+            for neighbor in graph[node]:
+                in_degree[neighbor] -= 1
+                if in_degree[neighbor] == 0:
+                    zero_in_degree.append(neighbor)
+
+        return_value = defaultdict(set)
+        for i in reversed(topo_order):
+            for dest in graph[i]:
+                return_value[i] |= return_value[dest]  # union two sets
+                return_value[i].add(dest)  # add self
+        return return_value
+
+    win_dict = helper(graph)
+    lose_dict = helper(reverse_graph)
+
+    return_value = 0
+    for i in range(1, N + 1):
+        win_against = win_dict[i]
+        lose_against = lose_dict[i]
+
+        # print(i, win_against, lose_against)
+        if len(win_against) + len(lose_against) == N - 1:
+            return_value += 1
+    return return_value
+
+
+# Can we use union-find to solve the repeated node issue?
+# have the memo set, contains all the node that's reachable
+# (including self, undirected), join a new set is not that expensive.
+
+
+class DisjointSetUnion:
+    def __init__(self, n):
+        # Initialize all the A->A, adding all the dots.
+        # [0]'s position is not used.
+        self.parent = list(range(n + 1))
+        self.size = [1] * (n + 1)
+
+    def find(self, x):
+        if self.parent[x] != x:
+            self.parent[x] = self.find(self.parent[x])
+        return self.parent[x]
+
+    def union(self, x, y):
+        rootX = self.find(x)
+        rootY = self.find(y)
+        if rootX != rootY:
+            if self.size[rootX] >= self.size[rootY]:
+                # NOTE, next find will flatten less nodes since Y is smaller, and X has already been flattened.
+                self.parent[rootY] = rootX
+                self.size[rootX] += self.size[rootY]
+                self.size[rootY] = 0
+            else:
+                self.parent[rootX] = rootY
+                self.size[rootY] += self.size[rootX]
+                self.size[rootX] = 0
+
+    def print(self, x):
+        # return all the reachable nodes from x, and x's parent
+        root = self.find(x)
+        reachable = [i for i in range(1, len(self.parent)) if self.find(i) == root]
+        print(
+            "For node",
+            x,
+            "reachable nodes are:",
+            reachable,
+            "root is:",
+            root,
+        )
+
+
+def rank_players_with_union_find(match_results, N):
+    graph = defaultdict(set)
+    reverse_graph = defaultdict(set)
+    for winner, loser in match_results:
+        graph[winner].add(loser)
+        reverse_graph[loser].add(winner)
+
+    # memoization
+    win_memo = DisjointSetUnion(N)
+    lose_memo = DisjointSetUnion(N)
+
+    # return a node
+    # TODO: handle visited
+    # return (root, size_when_first_visited)
+    # root is used when exploring its parent, size_when_first_visited is used for final result
+    def dfs(node, memo, graph, visited):
+        if node in visited:
+            # return node, so we don't do repeated calculation
+            # NOTE: this only works if when we are exploring, we are adding edges from existing set to new node (adding new parent)
+            # it doesn't work if we are adding nodes that are parallel (these parallel nodes will then become falsely connected)
+            return (memo.find(node), visited[node])
+        for neighbor in graph[node]:
+            memo.union(dfs(neighbor, memo, graph, visited)[0], node)
+        memo.print(node)
+        visited[node] = memo.size[
+            memo.find(node)
+        ]  # NOTE, DAG, we don't need visited before `for neighbors`, because we will not loop back to stack
+        return (memo.find(node), memo.size[memo.find(node)])
+
+    return_value = 0
+
+    win_visited = {}
+    lose_visited = {}
+    for i in range(1, N + 1):
+        # explore
+        win_against = dfs(i, win_memo, graph, win_visited)[1]
+        # DFS is already doing topological ordering, but it still doesn't work with union_find
+        # 1->2, 1->3, 1->4
+        # reverse = 1, 4->1, 3->1, 2->1
+        lose_against = dfs(i, lose_memo, reverse_graph, lose_visited)[1]
+
+        print(i, win_against, lose_against)
+        if win_against + lose_against == N + 1:
+            return_value += 1
+
+    return return_value
